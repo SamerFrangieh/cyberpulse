@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CyberPulse – Network Scanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen flex items-center justify-center">
+  <div class="bg-white shadow-2xl rounded-xl p-8 w-full max-w-2xl">
+    <h1 class="text-3xl font-bold text-center text-indigo-600 mb-6">CyberPulse</h1>
+    <p class="text-center mb-4">Scan IPs or domains for open ports and potential risks</p>
+
+    <div class="flex space-x-2 mb-4">
+      <input type="text" id="target" placeholder="e.g. 8.8.8.8" class="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <button onclick="runScan()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition">Scan</button>
+    </div>
+
+    <div id="results" class="mt-6 text-sm space-y-4"></div>
+  </div>
+
+  <script>
+    async function runScan() {
+      const target = document.getElementById("target").value;
+      const resDiv = document.getElementById("results");
+      resDiv.innerHTML = '<p class="text-gray-500">⏳ Scanning...</p>';
+
+      const formData = new FormData();
+      formData.append("target", target);
+
+      try {
+        const response = await fetch("/scan", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+        let output = "";
+
+        if (data.error) {
+          resDiv.innerHTML = `<p class="text-red-600">❌ ${data.error}</p>`;
+          return;
+        }
+
+        if (data.nmap.length > 0) {
+          output += `<div><h2 class="font-semibold text-lg text-indigo-600 mb-2">🔍 Open Ports:</h2><ul class="space-y-2">`;
+          data.nmap.forEach(item => {
+            output += `<li class="border p-3 rounded bg-gray-50 shadow-sm">
+              <strong>Port ${item.port}</strong> (${item.common_name || item.name || "unknown"}) - <span class="uppercase">${item.state}</span><br>
+              <span class="text-sm text-gray-600">Product:</span> ${item.product || "N/A"} ${item.version || ""}<br>
+              ${item.cpe ? `<span class="text-sm text-gray-600">CPE:</span> ${item.cpe}<br>` : ""}
+              ${item.product && item.version ? `<a href="https://www.cvedetails.com/version-search.php?product=${encodeURIComponent(item.product)}&version=${encodeURIComponent(item.version)}" target="_blank" class="text-blue-600 underline">🔗 Search CVEs</a>` : ""}
+            </li>`;
+          });
+          output += `</ul></div>`;
+        } else {
+          output += `<p>No open ports found.</p>`;
+        }
+
+        if (data.shodan.ip_str) {
+          output += `
+            <div class="mt-6">
+              <h2 class="font-semibold text-lg text-indigo-600 mb-2">🌐 Shodan Info:</h2>
+              <p><strong>IP:</strong> ${data.shodan.ip_str}</p>
+              <p><strong>ISP:</strong> ${data.shodan.isp || "N/A"}</p>
+              <p><strong>Org:</strong> ${data.shodan.org || "N/A"}</p>
+              ${data.shodan.hostnames && data.shodan.hostnames.length > 0 ? `<p><strong>Hostnames:</strong> ${data.shodan.hostnames.join(', ')}</p>` : ""}
+            </div>`;
+        }
+
+        resDiv.innerHTML = output;
+
+      } catch (err) {
+        resDiv.innerHTML = `<p class="text-red-600">❌ Failed to scan: ${err.message}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
